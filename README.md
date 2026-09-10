@@ -33,6 +33,50 @@ Debian/Ubuntu：`apt-get install -y protobuf-compiler clang libclang-dev cmake b
 之后 `cargo build --workspace` 即可。想用 cranelift 加速 debug 构建需要 nightly，
 具体见 `Cargo.toml` 顶部注释。
 
+### 交叉编译到 ARM64
+
+rocksdb（C++）和 mlua（vendored Lua，C）需要跟着一起交叉，所以除了 Rust target
+还得装对应的 C/C++ 交叉工具链：
+
+```
+apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+rustup target add aarch64-unknown-linux-gnu
+```
+
+`.cargo/config.toml`（该文件被 `.gitignore` 的 `.*/` 规则排除，需自行创建）：
+
+```toml
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+```
+
+然后：
+
+```bash
+CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
+CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
+AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar \
+BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu="--sysroot=/usr/aarch64-linux-gnu" \
+cargo build --workspace --release --target aarch64-unknown-linux-gnu
+```
+
+`BINDGEN_EXTRA_CLANG_ARGS_*` 是给 rocksdb 的 bindgen 指路的，少了它会找不到目标
+架构的系统头文件。
+
+产物在 `target/aarch64-unknown-linux-gnu/release/`，用 `file` 确认是
+`ELF 64-bit LSB pie executable, ARM aarch64` 而不是 x86-64。
+
+没有 ARM 机器时可以用 qemu 先验一遍：
+
+```bash
+apt-get install -y qemu-user-static
+qemu-aarch64-static -L /usr/aarch64-linux-gnu \
+  target/aarch64-unknown-linux-gnu/release/nod-krai-gi-dispatch-server
+```
+
+注意交叉工具链决定了产物的 glibc 下限（Ubuntu 24.04 的工具链为 2.39），目标机器
+的 glibc 低于这个值会报 `version GLIBC_x.yz not found`。
+
 ## 资源要求
 
 ### 协议文件

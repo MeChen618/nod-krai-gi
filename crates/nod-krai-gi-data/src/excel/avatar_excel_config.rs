@@ -79,6 +79,7 @@ pub struct AvatarExcelConfig {
     pub hp_base: f32,
     pub attack_base: f32,
     pub defense_base: f32,
+    #[serde(default)]
     pub critical: f32,
     pub critical_hurt: f32,
     #[serde(default)]

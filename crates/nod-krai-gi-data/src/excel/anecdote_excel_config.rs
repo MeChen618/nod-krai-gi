@@ -3,8 +3,12 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnecdoteExcelConfig {
+    // 7.0 起该字段名被混淆为 KKNGMIGLAOM；取值仍是 100001/100002/100101 这类
+    // anecdote id，其余候选字段都是 hash 状随机值，据此判定。
+    #[serde(alias = "KKNGMIGLAOM")]
     pub anecdote_id: u32,
-    #[serde(alias = "anecdoteQuestId")]
+    // 7.0 数据里此字段同样被混淆，且有多个同构数组字段无法区分，暂缺省为空。
+    #[serde(default, alias = "anecdoteQuestId")]
     pub parent_quest_id_list: Vec<u32>,
 }
 

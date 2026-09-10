@@ -162,6 +162,8 @@ pub enum Command {
     SendPacket(String),
     Dun(Option<u32>),
     Pos,
+    // help / help <命令>
+    Help(Option<String>),
 }
 
 // ----------------------------------------------------------------------------
@@ -316,6 +318,130 @@ pub enum GachaAction {
 // 公共解析函数
 // ============================================================================
 
+// ============================================================================
+// 帮助表
+// ============================================================================
+
+/// 一条命令的用法与说明。
+///
+/// 这张表是 `help` 命令的数据源，与下面 `parse_command` 的分支一一对应——
+/// 改解析分支时记得同步这里，`gm_util` 的单元测试会检查两边的命令名集合是否一致。
+pub struct CommandHelp {
+    /// 一级命令名，如 "avatar"
+    pub group: &'static str,
+    /// 完整用法，如 "avatar add <avatar_id>"
+    pub usage: &'static str,
+    /// 一句话说明
+    pub desc: &'static str,
+}
+
+pub const COMMAND_HELP: &[CommandHelp] = &[
+    // 角色
+    CommandHelp { group: "avatar", usage: "avatar add <avatar_id>", desc: "添加角色" },
+    CommandHelp { group: "avatar", usage: "avatar remove <avatar_id>", desc: "移除角色" },
+    CommandHelp { group: "avatar", usage: "avatar rename <avatar_id> <new_name>", desc: "重命名角色" },
+    CommandHelp { group: "avatar", usage: "avatar level <level>", desc: "设置当前角色等级" },
+    CommandHelp { group: "avatar", usage: "avatar break <break_level>", desc: "设置突破等级" },
+    CommandHelp { group: "avatar", usage: "avatar add_talent <talent_id>", desc: "添加命座" },
+    CommandHelp { group: "avatar", usage: "avatar skill <skill_id> <level>", desc: "设置技能等级" },
+    CommandHelp { group: "avatar", usage: "avatar elem <element_type>", desc: "设置元素类型" },
+    CommandHelp { group: "avatar", usage: "avatar fight_prop <key> <value>", desc: "设置战斗属性" },
+    // buff
+    CommandHelp { group: "buff", usage: "buff add <buff_id> [level <num>]", desc: "添加 buff" },
+    CommandHelp { group: "buff", usage: "buff clear", desc: "清空 buff" },
+    CommandHelp { group: "buff", usage: "buff list", desc: "列出当前 buff" },
+    // 物品
+    CommandHelp { group: "item", usage: "item add <item_id> [n <num>] [lv <num>] [r <num>] [m <num>] [p k,v;k,v]", desc: "添加物品；n 数量 lv 等级 r 精炼 m 主词条 p 副词条" },
+    CommandHelp { group: "item", usage: "item add material [max_count]", desc: "添加全部材料" },
+    CommandHelp { group: "item", usage: "item add furniture [max_count]", desc: "添加全部家具" },
+    CommandHelp { group: "item", usage: "item add weapon", desc: "添加全部武器" },
+    CommandHelp { group: "item", usage: "item clear [target]", desc: "清空背包，可指定类别" },
+    CommandHelp { group: "item", usage: "item drop <item_id>", desc: "在脚下掉落物品" },
+    // 武器
+    CommandHelp { group: "weapon", usage: "weapon level <level>", desc: "设置武器等级" },
+    CommandHelp { group: "weapon", usage: "weapon break <break_level>", desc: "设置武器突破" },
+    CommandHelp { group: "weapon", usage: "weapon promote <promote_level>", desc: "设置武器精炼" },
+    // 任务
+    CommandHelp { group: "quest", usage: "quest accept <quest_id>", desc: "接受任务" },
+    CommandHelp { group: "quest", usage: "quest cancel <quest_id>", desc: "取消任务" },
+    CommandHelp { group: "quest", usage: "quest finish <quest_id>", desc: "完成任务" },
+    CommandHelp { group: "quest", usage: "quest restart <quest_id>", desc: "重置任务" },
+    CommandHelp { group: "quest", usage: "quest restart_all", desc: "重置全部任务" },
+    CommandHelp { group: "quest", usage: "quest clear", desc: "清空任务" },
+    CommandHelp { group: "quest", usage: "quest state <quest_id> <state>", desc: "设置任务状态" },
+    CommandHelp { group: "quest", usage: "quest var <parent_id> [index] [value]", desc: "查看/设置任务变量" },
+    // 装置
+    CommandHelp { group: "gadget", usage: "gadget create <gadget_id> [num <n>] [drop_id <id>] [level <n>] [interact_id <id>] [x <n>] [y <n>] [z <n>]", desc: "生成装置" },
+    CommandHelp { group: "gadget", usage: "gadget remove <gadget_id>", desc: "移除装置" },
+    CommandHelp { group: "gadget", usage: "gadget state <gadget_id> <state>", desc: "按 gadget_id 设置状态" },
+    CommandHelp { group: "gadget", usage: "gadget set_state_by_entity_id <entity_id> <state>", desc: "按 entity_id 设置状态" },
+    // 群组
+    CommandHelp { group: "group", usage: "group refresh <group_id>", desc: "刷新群组" },
+    CommandHelp { group: "group", usage: "group reload <group_id>", desc: "重载群组" },
+    CommandHelp { group: "group", usage: "group unload <group_id>", desc: "卸载群组" },
+    CommandHelp { group: "group", usage: "group clear <group_id>", desc: "清空群组" },
+    CommandHelp { group: "group_suite", usage: "group_suite goto <group_id> <suite_id>", desc: "切换到指定 suite" },
+    CommandHelp { group: "group_suite", usage: "group_suite add_extra <group_id> <suite_id>", desc: "追加 suite" },
+    CommandHelp { group: "group_suite", usage: "group_suite remove_extra <group_id> <suite_id>", desc: "移除追加的 suite" },
+    CommandHelp { group: "group_suite", usage: "group_suite kill_extra <group_id> <suite_id>", desc: "清掉追加 suite 的实体" },
+    // 传送
+    CommandHelp { group: "tp", usage: "tp a <scene_id> [x <num>] [y <num>] [z <num>]", desc: "传送到绝对坐标" },
+    CommandHelp { group: "tp", usage: "tp r <scene_id> [x <num>] [y <num>] [z <num>]", desc: "相对当前位置传送" },
+    // 祈愿
+    CommandHelp { group: "gacha", usage: "gacha add <gacha_id>", desc: "添加卡池" },
+    CommandHelp { group: "gacha", usage: "gacha clear", desc: "清空卡池" },
+    // 其他
+    CommandHelp { group: "weather", usage: "weather <weather_id>", desc: "设置天气" },
+    CommandHelp { group: "climate", usage: "climate <climate_type>", desc: "设置气候" },
+    CommandHelp { group: "dun", usage: "dun [id]", desc: "进入副本，省略 id 则退出" },
+    CommandHelp { group: "pos", usage: "pos", desc: "显示当前坐标与场景 id" },
+    CommandHelp { group: "prop", usage: "prop <key> <value>", desc: "设置玩家属性" },
+    CommandHelp { group: "send_packet", usage: "send_packet <key>", desc: "发送调试包" },
+    CommandHelp { group: "help", usage: "help [命令]", desc: "列出命令，或查看某条命令的用法" },
+];
+
+/// `help` 无参时的输出：按一级命令名列出所有命令组。
+pub fn render_help_index() -> String {
+    let mut groups: Vec<&str> = Vec::new();
+    for h in COMMAND_HELP {
+        if !groups.contains(&h.group) {
+            groups.push(h.group);
+        }
+    }
+    format!(
+        "可用命令（共 {} 条）：\n{}\n\n用 help <命令> 查看具体用法，例如 help avatar",
+        COMMAND_HELP.len(),
+        groups.join("  ")
+    )
+}
+
+/// `help <命令>` 的输出。命令名不存在时给出相近提示。
+pub fn render_help_topic(topic: &str) -> String {
+    let topic = topic.trim().trim_start_matches('/');
+    let matched: Vec<&CommandHelp> = COMMAND_HELP.iter().filter(|h| h.group == topic).collect();
+
+    if matched.is_empty() {
+        // 前缀相近的候选，便于打错时定位
+        let mut near: Vec<&str> = Vec::new();
+        for h in COMMAND_HELP {
+            if (h.group.starts_with(topic) || topic.starts_with(h.group)) && !near.contains(&h.group) {
+                near.push(h.group);
+            }
+        }
+        return if near.is_empty() {
+            format!("没有名为 \"{}\" 的命令，用 help 查看全部", topic)
+        } else {
+            format!("没有名为 \"{}\" 的命令，你是否想找：{}", topic, near.join("  "))
+        };
+    }
+
+    let mut out = String::new();
+    for h in matched {
+        out.push_str(&format!("{}\n    {}\n", h.usage, h.desc));
+    }
+    out.trim_end().to_string()
+}
+
 pub fn parse_command(input: &str) -> Result<Command, String> {
     let input = input.trim();
     let input = input.strip_prefix('/').unwrap_or(input);
@@ -351,6 +477,10 @@ pub fn parse_command(input: &str) -> Result<Command, String> {
 
         "pos" => {
             return Ok(Command::Pos);
+        }
+
+        "help" => {
+            return Ok(Command::Help(parts.next().map(|v| v.to_string())));
         }
 
         "weather" => {
@@ -733,5 +863,81 @@ pub fn parse_command(input: &str) -> Result<Command, String> {
         // 未知命令
         // --------------------------------------------------------------------
         _ => Err(format!("unknown command: {} {}", first, second)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 从 usage 里取出命令路径，即前面不带 <> / [] 的那几个词。
+    /// 例如 "avatar add <avatar_id>" -> "avatar add"
+    fn command_path(usage: &str) -> String {
+        usage
+            .split_whitespace()
+            .take_while(|w| !w.starts_with('<') && !w.starts_with('['))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// COMMAND_HELP 里的每一条都必须真的能被 parse_command 认出来。
+    ///
+    /// 参数缺失导致的报错是允许的（这里只喂命令名，不喂参数），
+    /// 但不允许出现 "unknown command"——那说明帮助表写了个不存在的命令，
+    /// 或者解析分支被改名/删掉了而帮助表没跟上。
+    #[test]
+    fn help_entries_are_all_parseable() {
+        let mut bad = Vec::new();
+        for h in COMMAND_HELP {
+            let path = command_path(h.usage);
+            if let Err(e) = parse_command(&path) {
+                if e.starts_with("unknown command") {
+                    bad.push(format!("{}  ->  {}", h.usage, e));
+                }
+            }
+        }
+        assert!(bad.is_empty(), "帮助表里有解析不了的命令:\n{}", bad.join("\n"));
+    }
+
+    /// group 字段必须是 usage 的第一个词，否则 help <命令> 查不到。
+    #[test]
+    fn help_group_matches_usage_prefix() {
+        for h in COMMAND_HELP {
+            let first = h.usage.split_whitespace().next().unwrap_or("");
+            assert_eq!(h.group, first, "group 与 usage 首词不一致: {:?}", h.usage);
+        }
+    }
+
+    #[test]
+    fn help_index_lists_every_group() {
+        let out = render_help_index();
+        for h in COMMAND_HELP {
+            assert!(out.contains(h.group), "help 索引里缺少 {}", h.group);
+        }
+    }
+
+    #[test]
+    fn help_topic_lists_all_entries_of_that_group() {
+        let out = render_help_topic("avatar");
+        let n = COMMAND_HELP.iter().filter(|h| h.group == "avatar").count();
+        assert_eq!(out.lines().filter(|l| l.starts_with("avatar ")).count(), n);
+    }
+
+    #[test]
+    fn help_topic_suggests_on_typo() {
+        let out = render_help_topic("ava");
+        assert!(out.contains("avatar"), "应提示相近命令，实际: {}", out);
+        let out = render_help_topic("zzzz");
+        assert!(out.contains("help"), "应提示用 help 查看全部，实际: {}", out);
+    }
+
+    #[test]
+    fn help_parses_with_and_without_topic() {
+        assert!(matches!(parse_command("help"), Ok(Command::Help(None))));
+        assert!(matches!(parse_command("/help"), Ok(Command::Help(None))));
+        match parse_command("help avatar") {
+            Ok(Command::Help(Some(t))) => assert_eq!(t, "avatar"),
+            other => panic!("解析结果不对: {:?}", other),
+        }
     }
 }

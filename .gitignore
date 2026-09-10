@@ -20,11 +20,19 @@ target
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 .*/
-assets/BinOutput/*
-assets/ExcelBinOutput/*
-assets/lua/*
-assets/custom/*
-assets/cache/*
+# 游戏数据与协议文件不随仓库分发，使用者自备（见 README）。
+# 这里不带 /* ：目录和指向别处的符号链接都要挡住。
+assets/BinOutput
+assets/ExcelBinOutput
+assets/lua
+assets/custom
+assets/cache
+assets/proto
+
+# 首次运行自动生成
+/dispatch-server.toml
+/game-server.toml
+/game.db/
 crates/muip-server/*
 handbook/*
 

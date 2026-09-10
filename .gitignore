@@ -26,7 +26,6 @@ assets/lua/*
 assets/custom/*
 assets/cache/*
 crates/muip-server/*
-Cargo.lock
 handbook/*
 
 *.sqlite

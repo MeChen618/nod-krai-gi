@@ -244,6 +244,46 @@ def parse_masks(text):
     return masks
 
 
+YS_OPTION_RE = re.compile(r"\(ys_custom\)\.\w+\s*=\s*(?:\"[^\"]*\"|[^,\]]+)\s*,?\s*")
+
+
+def strip_ys_custom(text):
+    """去掉 ys_custom 扩展及其对 descriptor.proto 的 import。
+
+    服务端解析 all.proto 时只把版本目录本身作为 include 路径
+    （dy_parser.rs 的 `includes(&[... .parent()])`），解析不到
+    google/protobuf/descriptor.proto，会以 DependencyNotFound 崩掉加载线程。
+
+    这套注解的信息已经抽进 replace_value.json，且字段选项属于描述符元数据、
+    不参与 wire 编码，删掉不影响收发。
+    """
+    lines = text.split("\n")
+    out, skip_depth, dropped = [], 0, 0
+
+    for line in lines:
+        if skip_depth:
+            skip_depth += line.count("{") - line.count("}")
+            continue
+        st = line.strip()
+        if st.startswith('import "google/protobuf/descriptor.proto"'):
+            dropped += 1
+            continue
+        if re.match(r"^\s*(message\s+YsCustom|extend\s+google\.protobuf\.FieldOptions)\s*\{", line):
+            skip_depth = line.count("{") - line.count("}")
+            dropped += 1
+            continue
+        if "(ys_custom)" in line:
+            line = YS_OPTION_RE.sub("", line)
+            # 选项全删完后把空的 [] 也去掉
+            line = re.sub(r"\[\s*\]", "", line)
+            line = re.sub(r"\s+;", ";", line)
+        out.append(line)
+
+    if dropped:
+        print(f"  已剥离 ys_custom 扩展定义 {dropped} 处", file=sys.stderr)
+    return "\n".join(out)
+
+
 def parse_cmd_ids(text):
     """抽出 消息名 -> cmd_id。
 
@@ -344,6 +384,9 @@ def main():
             print(f"  警告: 看不懂的 mask 表达式，已跳过 {key} = {expr!r}", file=sys.stderr)
             continue
         replace_value[key] = cfg
+
+    # 必须在 parse_masks 之后：剥离会把注解本身删掉
+    text = strip_ys_custom(text)
 
     out = args.out_root / args.version
     out.mkdir(parents=True, exist_ok=True)

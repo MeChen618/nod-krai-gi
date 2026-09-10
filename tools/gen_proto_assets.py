@@ -33,18 +33,40 @@ CMD_ID_RE = re.compile(
 # uint32 team_id = 4 [(ys_custom).is_masked = true, (ys_custom).value_mask = "(val - 65504) ^ 27354"];
 MASK_RE = re.compile(
     r"^\s*\w[\w.<>, ]*\s+(\w+)\s*=\s*\d+\s*\[[^\]]*?"
-    r'\(ys_custom\)\.value_mask\s*=\s*"([^"]+)"',
-    re.MULTILINE,
+    r'\(ys_custom\)\.value_mask\s*=\s*"([^"]+)"'
 )
+
+MESSAGE_OPEN_RE = re.compile(r"^\s*message\s+(\w+)\s*\{")
+ENUM_OPEN_RE = re.compile(r"^\s*enum\s+\w+\s*\{")
 
 # dy_parser.rs 里 get_ty_value_by_version 找不到版本时的兜底值
 DEFAULT_TY_VALUE = 24
 
-# 服务端实际调用 replace_* 的字段（scene 进场景链路），这几个错了就进不去游戏
-CRITICAL_MASK_FIELDS = [
-    "team_id", "retcode", "cur_avatar_guid", "scene_id", "dungeon_id",
-    "enter_scene_token", "target_uid", "world_level", "enter_reason",
-    "scene_begin_time",
+# 服务端实际调用 replace_* 时传入的 key，逐字取自 crates/ 下的调用点。
+# 这些 key 的形式是 `消息名.字段名`，所以 replace_value.json 必须按同样的形式建表，
+# 否则 dy_parser.rs 的 replace_value_map.get() 一律 miss，混淆等于没生效。
+CRITICAL_MASK_KEYS = [
+    "EnterSceneDoneRsp.enter_scene_token",
+    "EnterSceneDoneRsp.retcode",
+    "EnterScenePeerNotify.enter_scene_token",
+    "EnterSceneReadyRsp.enter_scene_token",
+    "EnterSceneReadyRsp.retcode",
+    "PlayerEnterSceneNotify.dungeon_id",
+    "PlayerEnterSceneNotify.enter_reason",
+    "PlayerEnterSceneNotify.enter_scene_token",
+    "PlayerEnterSceneNotify.scene_begin_time",
+    "PlayerEnterSceneNotify.scene_id",
+    "PlayerEnterSceneNotify.target_uid",
+    "PlayerEnterSceneNotify.world_level",
+    "PostEnterSceneRsp.enter_scene_token",
+    "PostEnterSceneRsp.retcode",
+    "SceneInitFinishRsp.enter_scene_token",
+    "SceneInitFinishRsp.retcode",
+    "SetUpAvatarTeamReq.cur_avatar_guid",
+    "SetUpAvatarTeamReq.team_id",
+    "SetUpAvatarTeamRsp.cur_avatar_guid",
+    "SetUpAvatarTeamRsp.retcode",
+    "SetUpAvatarTeamRsp.team_id",
 ]
 
 
@@ -187,6 +209,41 @@ def fix_duplicate_fields(text):
     return "\n".join(lines)
 
 
+def parse_masks(text):
+    """抽取带 (ys_custom).value_mask 的字段，按 `消息名.字段名` 建表。
+
+    裸字段名不行：服务端查的是 `PlayerEnterSceneNotify.enter_scene_token` 这种
+    带消息名的 key，而且 enter_scene_token / retcode 这类字段在多个 message 里
+    各有各的常量，只用字段名会互相覆盖。
+    """
+    masks = {}
+    stack = []
+    for line in text.split("\n"):
+        m = MESSAGE_OPEN_RE.match(line)
+        if m:
+            stack.append(m.group(1))
+            continue
+        if ENUM_OPEN_RE.match(line):
+            stack.append(None)
+            continue
+        if NON_SCOPE_OPEN_RE.match(line):
+            continue
+        if line.strip().startswith("}"):
+            if stack:
+                stack.pop()
+            continue
+
+        m = MASK_RE.match(line)
+        if not m or not stack:
+            continue
+        # 取最近的 message 名；嵌套 message 用外层.内层，与 dump 拍平后的写法一致
+        owner = next((n for n in reversed(stack) if n), None)
+        if owner is None:
+            continue
+        masks.setdefault(f"{owner}.{m.group(1)}", m.group(2))
+    return masks
+
+
 def parse_cmd_ids(text):
     """抽出 消息名 -> cmd_id。
 
@@ -281,12 +338,12 @@ def main():
         raise SystemExit("dump 里没有带 cmd_id 的 GetPlayerTokenReq，服务端将无法识别该版本")
 
     replace_value = {}
-    for field, expr in MASK_RE.findall(text):
+    for key, expr in parse_masks(text).items():
         cfg = parse_mask(expr)
         if cfg is None:
-            print(f"  警告: 看不懂的 mask 表达式，已跳过 {field} = {expr!r}", file=sys.stderr)
+            print(f"  警告: 看不懂的 mask 表达式，已跳过 {key} = {expr!r}", file=sys.stderr)
             continue
-        replace_value[field] = cfg
+        replace_value[key] = cfg
 
     out = args.out_root / args.version
     out.mkdir(parents=True, exist_ok=True)
@@ -307,7 +364,7 @@ def main():
     print(f"  ty_value          {args.ty_value}")
     print(f"  混淆字段          {len(replace_value)}")
 
-    missing = [f for f in CRITICAL_MASK_FIELDS if f not in replace_value]
+    missing = [k for k in CRITICAL_MASK_KEYS if k not in replace_value]
     if missing:
         print(
             "\n注意: 服务端会对下列字段调用 replace_*，但本次没生成对应参数，"

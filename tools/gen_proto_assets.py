@@ -39,7 +39,10 @@ MASK_RE = re.compile(
 MESSAGE_OPEN_RE = re.compile(r"^\s*message\s+(\w+)\s*\{")
 ENUM_OPEN_RE = re.compile(r"^\s*enum\s+\w+\s*\{")
 
-# dy_parser.rs 里 get_ty_value_by_version 找不到版本时的兜底值
+# 注意：24 是 dy_parser.rs 的 get_ty_value_by_version 在「找不到该版本」时的兜底值，
+# 不是任何一个版本的权威取值。ty_value 决定 entity_id >> ty_value 的实体类型判断，
+# 逐版本不同且无法从 dump 推出（已知 6.6.0 的实测值是 21）。没有确切值时这里只能
+# 先写一个占位并告警，必须拿已知可用的配置核对后用 --ty-value 指定。
 DEFAULT_TY_VALUE = 24
 
 # 服务端实际调用 replace_* 时传入的 key，逐字取自 crates/ 下的调用点。
@@ -405,6 +408,14 @@ def main():
     print(f"  消息数            {len(cmd_ids)}")
     print(f"  GetPlayerTokenReq {cmd_ids['GetPlayerTokenReq']}")
     print(f"  ty_value          {args.ty_value}")
+    if args.ty_value == DEFAULT_TY_VALUE:
+        print(
+            f"\n警告: ty_value 用的是占位值 {DEFAULT_TY_VALUE}，它来自服务端「版本缺失」时的兜底，\n"
+            "      不是任何版本的权威取值。该值逐版本不同（6.6.0 实测为 21），错了会让\n"
+            "      entity_id >> ty_value 的实体类型判断整体出错。请拿一份已知可用的\n"
+            "      version_config.json 核对后用 --ty-value 指定。",
+            file=sys.stderr,
+        )
     print(f"  混淆字段          {len(replace_value)}")
 
     missing = [k for k in CRITICAL_MASK_KEYS if k not in replace_value]

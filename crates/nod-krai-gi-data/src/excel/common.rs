@@ -257,6 +257,11 @@ lua_enum! {
         UgcSpecialGadget = 71,
         alias("DESHRET_OBELISK_GADGET")
         DeshretObeliskGadget = 72,
+        // 7.0 新增。GadgetExcelConfigData 里出现 "BrokenIce"，旧枚举没有对应变体，
+        // 会让 gadget 配置整体反序列化失败。序号 72 之前是连续的，故取 73；
+        // 真实取值未经客户端核对，若后续发现不符需要更正。
+        alias("BROKEN_ICE")
+        BrokenIce = 73,
         alias("REGION")
         Region = 98,
         alias("PLACE_HOLDER")

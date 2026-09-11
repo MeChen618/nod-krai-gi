@@ -4,6 +4,8 @@ use std::collections::HashMap;
 #[serde(rename_all = "camelCase")]
 pub struct AvatarCostumeExcelConfig {
     pub skin_id: u32,
+    // 默认时装没有对应道具，7.0 数据里 160 条中 130 条无此字段
+    #[serde(default)]
     pub item_id: u32,
     pub character_id: u32,
     pub desc_text_map_hash: u64,

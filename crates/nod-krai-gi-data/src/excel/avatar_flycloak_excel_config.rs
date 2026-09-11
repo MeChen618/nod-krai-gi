@@ -3,6 +3,8 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AvatarFlycloakExcelConfig {
+    // 7.0 起该字段名被混淆为 FOJCCHCMOIE，取值 140001 起、与滑翔翼 id 段一致。
+    #[serde(alias = "FOJCCHCMOIE")]
     pub flycloak_id: u32,
     pub desc_text_map_hash: u64,
     pub name_text_map_hash: u64,

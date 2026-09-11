@@ -16,9 +16,22 @@ fn load_avatar_talent_configs(talent_config_dir: ReadDir) -> std::io::Result<()>
     let mut map = HashMap::new();
     for entry in talent_config_dir {
         let entry = entry?;
-        let json = std::fs::read(entry.path())?;
-        let config: TalentConfig = serde_json::from_slice(&*json)?;
-        map.extend(config.talents);
+        let json = match std::fs::read(entry.path()) {
+            Ok(json) => json,
+            Err(e) => {
+                println!("failed to read talent config: {:?} {:?}", e, entry.path());
+                continue;
+            }
+        };
+        // 单个文件坏掉不该拖垮整份配置：第三方数据包里出现空文件或截断文件很常见，
+        // 早先这里用 `?` 直接中断循环，再被 main.rs 的 unwrap 变成 panic，
+        // 服务端会在启动阶段直接挂掉，且报错不指出是哪个文件。
+        match serde_json::from_slice::<TalentConfig>(&*json) {
+            Ok(config) => map.extend(config.talents),
+            Err(e) => {
+                println!("failed to parse talent config: {:?} {:?}", e, entry.path());
+            }
+        }
     }
 
     let _ = AVATAR_TALENT_CONFIG_MAP.set(map);

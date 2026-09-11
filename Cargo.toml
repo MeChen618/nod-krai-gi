@@ -1,8 +1,12 @@
-cargo-features = ["codegen-backend"]
+# 想用 cranelift 后端加速 debug 构建（需要 nightly + rustc-codegen-cranelift-preview 组件），
+# 取消下面两行的注释，并把 [profile.dev] 里的 codegen-backend 一起打开：
+#   rustup toolchain install nightly
+#   rustup component add rustc-codegen-cranelift-preview --toolchain nightly
+# cargo-features = ["codegen-backend"]
 
 [profile.dev]
 opt-level = 1
-codegen-backend = "cranelift"
+# codegen-backend = "cranelift"
 
 [profile.dev.package."*"]
 opt-level = 3
@@ -20,7 +24,7 @@ members = [
     "crates/kcp",
     "crates/common",
     "crates/dispatch-server",
-    "crates/muip-server",
+    # "crates/muip-server",  # 未包含在仓库中，见 .gitignore
     "crates/game-server",
     "crates/game-server-core",
     "crates/nod-krai-gi-persistence",
@@ -36,7 +40,6 @@ members = [
     "crates/nod-krai-gi-quest",
     "crates/nod-krai-gi-social",
     "crates/nod-krai-gi-script",
-    "crates/nod-krai-gi-event",
     "crates/nod-krai-gi-banner",
 ]
 resolver = "2"
@@ -106,8 +109,8 @@ rayon = "1.10.0"
 rstar = "0.12.2"
 
 # Logging
-tracing = { version = "*" }
-tracing-subscriber = { version = "*", features = ["env-filter"] }
+tracing = { version = "0.1.44" }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 # Internal
 common = { path = "crates/common" }

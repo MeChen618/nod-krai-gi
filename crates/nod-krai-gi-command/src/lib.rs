@@ -242,6 +242,13 @@ pub fn gm_command_handler(
                             ));
                         }
                     },
+                    Command::Help(topic) => {
+                        let text = match topic {
+                            Some(t) => common::gm_util::render_help_topic(t),
+                            None => common::gm_util::render_help_index(),
+                        };
+                        gm_notify_events.write(ConsoleChatNotifyEvent(*player_uid, text));
+                    }
                     Command::Pos => {
                         if let Some(ref scene_bin) = player_info.scene_bin {
                             let pos = scene_bin.my_cur_scene_pos.unwrap_or_default();

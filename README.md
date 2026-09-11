@@ -33,7 +33,55 @@ Debian/Ubuntu：`apt-get install -y protobuf-compiler clang libclang-dev cmake b
 之后 `cargo build --workspace` 即可。想用 cranelift 加速 debug 构建需要 nightly，
 具体见 `Cargo.toml` 顶部注释。
 
-### 交叉编译到 ARM64
+### 编译 Android 版（Termux 原生运行）
+
+上游 release 的二进制是按 Android 目标编的：
+
+```
+$ file nod-krai-gi-game-server
+ELF 64-bit LSB pie executable, ARM aarch64, ...,
+  interpreter /system/bin/linker64, stripped
+```
+
+`/system/bin/linker64` 是 Android 的 Bionic 链接器，因此这些二进制在 Termux 里
+原生运行，不需要 proot 或任何 glibc 环境。目标三元组是 `aarch64-linux-android`。
+
+对照：本节下面那套 `aarch64-unknown-linux-gnu` 产物的解释器是
+`/lib/ld-linux-aarch64.so.1`，Termux 没有这个文件，直接跑会报
+`sh: 1: ./nod-krai-gi-game-server: not found`——这里的 "not found" 指的是
+找不到解释器，不是找不到二进制。
+
+有两条路：
+
+**一、在手机上用 Termux 直接编（不需要 NDK）**
+
+Termux 自带完整工具链，本身就是 Android 环境，编出来就是原生的：
+
+```bash
+pkg install rust clang cmake protobuf binutils
+cargo build --workspace --release
+```
+
+省掉了交叉编译的全部配置。代价是手机上编 289 个 crate 比较慢，
+rocksdb 和 mlua 尤其吃时间。
+
+**二、在 PC 上用 NDK 交叉编译**
+
+```bash
+# NDK 从 developer.android.com 下载，解压后设 ANDROID_NDK_HOME
+rustup target add aarch64-linux-android
+cargo install cargo-ndk
+cargo ndk -t arm64-v8a build --workspace --release
+```
+
+`cargo-ndk` 会自动把 NDK 的 clang 配置给 rocksdb 与 mlua 的 build script。
+不用它的话需要手动设 `CC_aarch64_linux_android` / `CXX_aarch64_linux_android`
+等一系列变量，并让 bindgen 指向 NDK 的 sysroot。
+
+> 以上两种方式均未在本仓库的 CI 或开发环境中实际验证过——本环境无法获取 NDK。
+> 已验证的只有上游产物确为 `aarch64-linux-android` 目标这一点（见上面的 file 输出）。
+
+### 交叉编译到 ARM64（glibc，需要 proot 或普通 Linux 发行版）
 
 rocksdb（C++）和 mlua（vendored Lua，C）需要跟着一起交叉，所以除了 Rust target
 还得装对应的 C/C++ 交叉工具链：

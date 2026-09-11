@@ -42,9 +42,22 @@ fn load_avatar_configs(avatar_config_dir: ReadDir) -> std::io::Result<()> {
             .replace("ConfigAvatar_", "")
             .replace(".json", "");
 
-        let json = std::fs::read(entry.path())?;
-        let config: AvatarConfig = serde_json::from_slice(&*json)?;
-        map.insert(avatar_name.into(), config);
+        let json = match std::fs::read(entry.path()) {
+            Ok(json) => json,
+            Err(e) => {
+                println!("failed to read avatar config: {:?} {:?}", e, entry.path());
+                continue;
+            }
+        };
+        // 同 avatar_talent.rs：坏文件跳过而不是中断整份配置
+        match serde_json::from_slice::<AvatarConfig>(&*json) {
+            Ok(config) => {
+                map.insert(avatar_name.into(), config);
+            }
+            Err(e) => {
+                println!("failed to parse avatar config: {:?} {:?}", e, entry.path());
+            }
+        }
     }
 
     let _ = AVATAR_CONFIG_MAP.set(map);

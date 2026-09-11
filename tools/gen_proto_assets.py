@@ -13,6 +13,12 @@
     python3 tools/gen_proto_assets.py <dump.proto> <版本号> [--ty-value N]
     python3 tools/gen_proto_assets.py ~/all.proto 6.6.0
 
+关于混淆常量的跨版本稳定性：
+对比 kitkat033 的 6.5.0 与 6.6.0 两份 dump 发现，cmd_id 每版本全部重排
+（1636 个共有消息里相同的 0 个），但 value_mask 常量 29/29 条完全未变。
+因此当目标版本的 dump 不带注解时，沿用相邻版本的 replace_value.json 比
+留空表更有依据——但这仍是推测，大版本跳跃时需实测确认。
+
 关于 replace_value.json：
 只有当 dump 里带 `(ys_custom).value_mask = "..."` 注解时才能自动生成。不带注解的
 dump 会生成空的 {}，此时服务端对这些字段不做任何变换 —— 如果客户端那一版确实
